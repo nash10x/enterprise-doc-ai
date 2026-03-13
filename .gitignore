@@ -4,9 +4,6 @@
 # Vector store data
 vectorstore/
 
-# Documentation PDFs
-docs/
-
 # Python
 __pycache__/
 *.py[cod]
