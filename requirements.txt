@@ -1,6 +1,6 @@
 langchain
 langchain-community
-langchain-google-genai
+langchain-openai
 langchain-text-splitters
 chromadb
 pypdf
@@ -8,3 +8,4 @@ beautifulsoup4
 requests
 streamlit
 python-dotenv
+tavily-python
