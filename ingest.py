@@ -1,4 +1,5 @@
 import os
+import glob
 from dotenv import load_dotenv
 import time
 import random
@@ -6,22 +7,35 @@ import random
 # LangChain components
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
+import chromadb
+
+from config import DOCS_DIR, CHUNK_SIZE, CHUNK_OVERLAP, EMBEDDING_MODEL, LLM_BASE_URL, LLM_API_KEY, CHROMA_HOST, CHROMA_PORT, CHROMA_COLLECTION
 
 
 def load_documents():
     """
-    Load documentation PDFs
+    Load all PDF files from the docs directory
     """
-    print("Loading documentation...")
+    print(f"Scanning {DOCS_DIR}/ for PDF files...")
 
-    loader = PyPDFLoader("docs/Applications_configuration_guide.pdf")
-    documents = loader.load()
+    pdf_files = sorted(glob.glob(os.path.join(DOCS_DIR, "*.pdf")))
 
-    print(f"Loaded {len(documents)} pages")
+    if not pdf_files:
+        raise FileNotFoundError(f"No PDF files found in {DOCS_DIR}/")
 
-    return documents
+    all_documents = []
+    for pdf_path in pdf_files:
+        print(f"  Loading {os.path.basename(pdf_path)}...")
+        loader = PyPDFLoader(pdf_path)
+        documents = loader.load()
+        all_documents.extend(documents)
+        print(f"    → {len(documents)} pages")
+
+    print(f"Loaded {len(all_documents)} pages from {len(pdf_files)} PDF(s)")
+
+    return all_documents
 
 
 def split_documents(documents):
@@ -32,8 +46,8 @@ def split_documents(documents):
     print("Splitting documents into chunks...")
 
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=800,
-        chunk_overlap=200
+        chunk_size=CHUNK_SIZE,
+        chunk_overlap=CHUNK_OVERLAP
     )
 
     chunks = text_splitter.split_documents(documents)
@@ -45,14 +59,27 @@ def split_documents(documents):
 
 def create_vectorstore(chunks):
     """
-    Create embeddings and store in Chroma DB
+    Create embeddings and store in ChromaDB server
     """
 
     print("Creating embeddings...")
 
-    embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/gemini-embedding-001"
+    embeddings = OpenAIEmbeddings(
+        base_url=LLM_BASE_URL,
+        api_key=LLM_API_KEY,
+        model=EMBEDDING_MODEL
     )
+
+    print(f"Connecting to ChromaDB at {CHROMA_HOST}:{CHROMA_PORT}...")
+
+    chroma_client = chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT)
+
+    # Delete existing collection to re-ingest cleanly
+    try:
+        chroma_client.delete_collection(CHROMA_COLLECTION)
+        print(f"  Cleared existing collection '{CHROMA_COLLECTION}'")
+    except Exception:
+        pass
 
     print("Building vector database...")
 
@@ -62,7 +89,8 @@ def create_vectorstore(chunks):
             vectorstore = Chroma.from_documents(
                 documents=chunks,
                 embedding=embeddings,
-                persist_directory="vectorstore"
+                client=chroma_client,
+                collection_name=CHROMA_COLLECTION
             )
             break
         except Exception as e:
@@ -99,8 +127,8 @@ def main():
 
     load_dotenv()
 
-    if not os.getenv("GOOGLE_API_KEY"):
-        raise ValueError("GOOGLE_API_KEY not found in environment variables")
+    if not LLM_API_KEY:
+        raise ValueError("LLM_API_KEY not found in environment variables")
 
     documents = load_documents()
 
