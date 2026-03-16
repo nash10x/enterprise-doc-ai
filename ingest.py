@@ -1,5 +1,7 @@
 import os
 from dotenv import load_dotenv
+import time
+import random
 
 # LangChain components
 from langchain_community.document_loaders import PyPDFLoader
@@ -14,7 +16,7 @@ def load_documents():
     """
     print("Loading documentation...")
 
-    loader = PyPDFLoader("docs/Product_overview.pdf")
+    loader = PyPDFLoader("docs/Applications_configuration_guide.pdf")
     documents = loader.load()
 
     print(f"Loaded {len(documents)} pages")
@@ -54,11 +56,22 @@ def create_vectorstore(chunks):
 
     print("Building vector database...")
 
-    vectorstore = Chroma.from_documents(
-        documents=chunks,
-        embedding=embeddings,
-        persist_directory="vectorstore"
-    )
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            vectorstore = Chroma.from_documents(
+                documents=chunks,
+                embedding=embeddings,
+                persist_directory="vectorstore"
+            )
+            break
+        except Exception as e:
+            if "429" in str(e) and attempt < max_retries - 1:
+                wait = (2 ** attempt) + random.uniform(0, 1)
+                print(f"Rate limited. Retrying in {wait:.1f}s... (attempt {attempt + 1}/{max_retries})")
+                time.sleep(wait)
+            else:
+                raise
 
     print("Vector database saved successfully")
 
