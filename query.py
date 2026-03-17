@@ -2,13 +2,12 @@ import os
 import time
 from dotenv import load_dotenv
 
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_community.vectorstores import Chroma
+from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-import chromadb
 
-from config import EMBEDDING_MODEL, LLM_MODEL, LLM_TEMPERATURE, RETRIEVER_K, LLM_BASE_URL, LLM_API_KEY, CHROMA_HOST, CHROMA_PORT, CHROMA_COLLECTION
+from config import LLM_MODEL, LLM_TEMPERATURE, LLM_BASE_URL, LLM_API_KEY
+from retriever import create_retriever
 from web_search import search_web
 
 
@@ -23,30 +22,14 @@ Question: {question}
 Answer:"""
 
 
-def load_vectorstore():
-    embeddings = OpenAIEmbeddings(
-        base_url=LLM_BASE_URL,
-        api_key=LLM_API_KEY,
-        model=EMBEDDING_MODEL
-    )
-    chroma_client = chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT)
-    vectorstore = Chroma(
-        client=chroma_client,
-        collection_name=CHROMA_COLLECTION,
-        embedding_function=embeddings
-    )
-    return vectorstore
-
-
 def main():
     load_dotenv()
 
     if not LLM_API_KEY:
         raise ValueError("LLM_API_KEY not found in environment variables")
 
-    print("Loading vector database...")
-    vectorstore = load_vectorstore()
-    retriever = vectorstore.as_retriever(search_kwargs={"k": RETRIEVER_K})
+    print("Loading retriever...")
+    retriever = create_retriever()
 
     llm = ChatOpenAI(
         base_url=LLM_BASE_URL,
@@ -97,7 +80,11 @@ def main():
         for i, doc in enumerate(docs, 1):
             source = doc.metadata.get("source", "unknown")
             page = doc.metadata.get("page", "?")
-            print(f"  {i}. {source} (page {page})")
+            section = doc.metadata.get("section", "")
+            info = f"  {i}. {source} (page {page})"
+            if section:
+                info += f" \u2014 {section}"
+            print(info)
         if web_context:
             print("  + Additional context from official documentation website")
         print()

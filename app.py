@@ -2,13 +2,12 @@ import os
 import streamlit as st
 from dotenv import load_dotenv
 
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_community.vectorstores import Chroma
+from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-import chromadb
 
-from config import EMBEDDING_MODEL, LLM_MODEL, LLM_TEMPERATURE, RETRIEVER_K, LLM_BASE_URL, LLM_API_KEY, CHROMA_HOST, CHROMA_PORT, CHROMA_COLLECTION
+from config import LLM_MODEL, LLM_TEMPERATURE, LLM_BASE_URL, LLM_API_KEY
+from retriever import create_retriever
 from web_search import search_web
 
 load_dotenv()
@@ -44,21 +43,7 @@ The assistant retrieves relevant sections and generates answers using RAG.
 """
 )
 
-embeddings = OpenAIEmbeddings(
-    base_url=LLM_BASE_URL,
-    api_key=LLM_API_KEY,
-    model=EMBEDDING_MODEL
-)
-
-chroma_client = chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT)
-
-vectorstore = Chroma(
-    client=chroma_client,
-    collection_name=CHROMA_COLLECTION,
-    embedding_function=embeddings
-)
-
-retriever = vectorstore.as_retriever(search_kwargs={"k": RETRIEVER_K})
+retriever = create_retriever()
 
 llm = ChatOpenAI(
     base_url=LLM_BASE_URL,
@@ -90,18 +75,31 @@ if query:
 
     with st.spinner("Searching documentation..."):
 
+        print(f"[QUERY] '{query}'")
+
         docs = retriever.invoke(query)
+        print(f"[RETRIEVER] {len(docs)} chunks retrieved from ChromaDB")
+        for i, doc in enumerate(docs):
+            source = doc.metadata.get('source', 'unknown')
+            page = doc.metadata.get('page', '?')
+            print(f"  chunk {i+1}: {source} (page {page}) [{len(doc.page_content)} chars]")
+
         context = "\n\n".join(doc.page_content for doc in docs)
 
         # Fallback to Tavily web search if local context is insufficient
         web_context = ""
         if not docs:
+            print("[TAVILY] No local results — triggering web search fallback")
             web_context = search_web(query)
+        else:
+            print("[TAVILY] Skipped — local results sufficient")
 
         if web_context:
             context = context + "\n\n--- Web Search Results ---\n\n" + web_context if context else web_context
 
+        print(f"[LLM] Sending to {LLM_MODEL} ({len(context)} chars context)")
         answer = chain.invoke({"context": context, "question": query})
+        print(f"[LLM] Response received ({len(answer)} chars)")
 
     st.subheader("Answer")
 
@@ -110,12 +108,14 @@ if query:
     st.subheader("Sources")
 
     for i, doc in enumerate(docs):
-
-        st.markdown(f"**Source {i+1}**")
-
+        source = doc.metadata.get("source", "unknown")
+        page = doc.metadata.get("page", "?")
+        section = doc.metadata.get("section", "")
+        header = f"**Source {i+1}** \u2014 {source} (page {page})"
+        if section:
+            header += f" \u2014 {section}"
+        st.markdown(header)
         st.write(doc.page_content[:400])
 
     if web_context:
         st.markdown("**+ Additional context from [official documentation website](https://docs.microfocus.com/doc/76/25.2/home)**")
-
-        st.write(doc.page_content[:400])

@@ -9,8 +9,10 @@ def search_web(query: str, max_results: int = 5) -> str:
     Returns formatted context string from web results.
     """
     if not TAVILY_API_KEY:
+        print("[TAVILY] No TAVILY_API_KEY configured — skipping web search")
         return ""
 
+    print(f"[TAVILY] Searching '{TAVILY_SEARCH_DOMAIN}' for: {query}")
     client = TavilyClient(api_key=TAVILY_API_KEY)
 
     response = client.search(
@@ -22,7 +24,10 @@ def search_web(query: str, max_results: int = 5) -> str:
 
     results = response.get("results", [])
     if not results:
+        print("[TAVILY] No results found")
         return ""
+
+    print(f"[TAVILY] {len(results)} results found")
 
     snippets = []
     for r in results:
