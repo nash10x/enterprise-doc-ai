@@ -1,6 +1,7 @@
 langchain
 langchain-community
 langchain-openai
+langchain-experimental
 langchain-text-splitters
 chromadb
 pypdf

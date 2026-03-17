@@ -3,6 +3,7 @@
 
 # Vector store data
 vectorstore/
+docstore/
 
 # Python
 __pycache__/
