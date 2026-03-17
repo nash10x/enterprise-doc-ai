@@ -10,3 +10,4 @@ requests
 streamlit
 python-dotenv
 tavily-python
+rank_bm25

@@ -6,15 +6,6 @@ services:
     volumes:
       - chroma_data:/chroma/chroma
 
-  chromadb-admin:
-    image: ghcr.io/flanker/chromadb-admin:latest
-    ports:
-      - "3000:3000"
-    environment:
-      - CHROMADB_URL=http://chromadb:8000
-    depends_on:
-      - chromadb
-
   app:
     build: .
     ports:

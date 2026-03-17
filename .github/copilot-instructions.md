@@ -9,7 +9,7 @@ RAG system for querying OpenText Access Manager documentation. Users ask natural
 ```
 ingest.py      →  PDFs → parent chunks → child chunks → Model Broker embeddings → ChromaDB
                   Parents stored as JSON in docstore/
-retriever.py   →  ParentChildRetriever: searches children, returns parents
+retriever.py   →  HybridParentChildRetriever: dense (ChromaDB) + sparse (BM25) → RRF → parents
 query.py       →  retriever → LCEL chain → CLI answers (+ Tavily fallback)
 app.py         →  retriever → LCEL chain → Streamlit UI (+ Tavily fallback)
 web_search.py  →  Tavily client, restricted to docs.microfocus.com
@@ -17,7 +17,8 @@ config.py      →  Central config, all values from env vars with defaults
 ```
 
 - `retriever.py` is the **shared retriever module** — both `query.py` and `app.py` use `create_retriever()`
-- Parent-child splitting: large parent chunks (~1500 chars) stored as JSON; small child chunks (~400 chars) embedded in ChromaDB for similarity search; retrieval returns the parent chunk
+- **Hybrid retrieval**: dense semantic search (ChromaDB embeddings) + sparse keyword search (BM25) fused via Reciprocal Rank Fusion (RRF), aggregated by parent
+- Parent-child splitting: large parent chunks (~1500 chars) stored as JSON; small child chunks (~400 chars) embedded in ChromaDB for similarity search; child corpus saved as JSON for BM25 index; retrieval returns the parent chunk
 - Optional semantic chunking (embedding-based split points) via `USE_SEMANTIC_CHUNKING=true`
 - Prompt templates are duplicated between `query.py` and `app.py`
 - ChromaDB runs as a standalone server (container), connected via `chromadb.HttpClient`
@@ -61,6 +62,7 @@ All config lives in `config.py`, read from environment variables (`.env` file). 
 | `USE_SEMANTIC_CHUNKING` | `false` | Use embedding-based split points for children |
 | `DOCSTORE_DIR` | `docstore` | Directory for parent document JSON files |
 | `RETRIEVER_K` | `5` | Number of child chunks searched per query |
+| `RRF_K` | `60` | Reciprocal Rank Fusion constant |
 
 When changing models or parameters, update `.env` — `config.py` will pick them up. No code changes needed.
 

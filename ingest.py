@@ -2,7 +2,6 @@ import os
 import glob
 import json
 import re
-import shutil
 import uuid
 from dotenv import load_dotenv
 import time
@@ -136,6 +135,20 @@ def store_parents(parent_chunks):
             }, f)
 
 
+def store_children_corpus(child_chunks):
+    """Save child chunk texts and metadata for BM25 index at query time."""
+    corpus = []
+    for child in child_chunks:
+        corpus.append({
+            "page_content": child.page_content,
+            "doc_id": child.metadata.get("doc_id"),
+        })
+    path = os.path.join(DOCSTORE_DIR, "children_corpus.json")
+    with open(path, "w") as f:
+        json.dump(corpus, f)
+    print(f"  Saved {len(corpus)} child texts to {path}")
+
+
 def create_vectorstore(child_chunks, embeddings):
     """Embed child chunks and store in ChromaDB."""
 
@@ -174,9 +187,8 @@ def create_vectorstore(child_chunks, embeddings):
     return vectorstore
 
 
-def test_search():
-    """Test the full parent-child retrieval pipeline."""
-
+""" def test_search():
+    
     from retriever import create_retriever
 
     print("\nTesting retrieval...")
@@ -194,7 +206,7 @@ def test_search():
         source = doc.metadata.get("source", "unknown")
         page = doc.metadata.get("page", "?")
         print(f"Source: {source} (page {page})")
-        print(doc.page_content[:500])
+        print(doc.page_content[:500]) """
 
 
 def main():
@@ -226,8 +238,10 @@ def main():
     # Store parents as JSON for retrieval
     print("\nStoring parent documents...")
     if os.path.exists(DOCSTORE_DIR):
-        shutil.rmtree(DOCSTORE_DIR)
+        for f in os.listdir(DOCSTORE_DIR):
+            os.remove(os.path.join(DOCSTORE_DIR, f))
     store_parents(parent_chunks)
+    store_children_corpus(child_chunks)
     print(f"  Saved {len(parent_chunks)} parents to {DOCSTORE_DIR}/")
 
     # Store children in ChromaDB
@@ -235,8 +249,6 @@ def main():
     create_vectorstore(child_chunks, embeddings)
 
     print(f"\nIngestion complete: {len(parent_chunks)} parents, {len(child_chunks)} children")
-
-    test_search()
 
 
 if __name__ == "__main__":

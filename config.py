@@ -32,6 +32,7 @@ CHROMA_COLLECTION = os.getenv("CHROMA_COLLECTION", "enterprise_docs")
 
 # Retrieval
 RETRIEVER_K = int(os.getenv("RETRIEVER_K", "5"))
+RRF_K = int(os.getenv("RRF_K", "60"))
 
 # Tavily (web search fallback)
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")

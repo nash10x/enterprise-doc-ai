@@ -130,6 +130,7 @@ All configuration is centralized in `config.py` and read from environment variab
 | `USE_SEMANTIC_CHUNKING` | `false` | Use embedding-based split points for children |
 | `DOCSTORE_DIR` | `docstore` | Directory for parent document JSON files |
 | `RETRIEVER_K` | `5` | Number of child chunks searched per query |
+| `RRF_K` | `60` | Reciprocal Rank Fusion constant |
 | `TAVILY_API_KEY` | *(optional)* | Enables web search fallback |
 
 ## Project Structure
