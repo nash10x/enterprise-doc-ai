@@ -7,16 +7,21 @@ RAG system for querying OpenText Access Manager documentation. Users ask natural
 ## Architecture
 
 ```
-ingest.py  →  All PDFs in docs/ → chunks → Model Broker embeddings → ChromaDB server
-query.py   →  ChromaDB retriever → LCEL chain → CLI answers (+ Tavily fallback)
-app.py     →  ChromaDB retriever → LCEL chain → Streamlit UI (+ Tavily fallback)
-web_search.py → Tavily client, restricted to docs.microfocus.com
-config.py  →  Central config, all values from env vars with defaults
+ingest.py      →  PDFs → parent chunks → child chunks → Model Broker embeddings → ChromaDB
+                  Parents stored as JSON in docstore/
+retriever.py   →  ParentChildRetriever: searches children, returns parents
+query.py       →  retriever → LCEL chain → CLI answers (+ Tavily fallback)
+app.py         →  retriever → LCEL chain → Streamlit UI (+ Tavily fallback)
+web_search.py  →  Tavily client, restricted to docs.microfocus.com
+config.py      →  Central config, all values from env vars with defaults
 ```
 
-- **No shared state** between modules — each file independently creates its own embeddings/LLM/vectorstore clients
+- `retriever.py` is the **shared retriever module** — both `query.py` and `app.py` use `create_retriever()`
+- Parent-child splitting: large parent chunks (~1500 chars) stored as JSON; small child chunks (~400 chars) embedded in ChromaDB for similarity search; retrieval returns the parent chunk
+- Optional semantic chunking (embedding-based split points) via `USE_SEMANTIC_CHUNKING=true`
 - Prompt templates are duplicated between `query.py` and `app.py`
 - ChromaDB runs as a standalone server (container), connected via `chromadb.HttpClient`
+- ChromaDB Admin UI available at `localhost:3000` (Docker only)
 
 ## Build and Run
 
@@ -45,13 +50,17 @@ All config lives in `config.py`, read from environment variables (`.env` file). 
 | `LLM_BASE_URL` | Model Broker `/v1` endpoint | OpenAI-compatible API base |
 | `LLM_API_KEY` | *(required)* | Virtual key for Model Broker |
 | `LLM_MODEL` | `llama-3.3-70b` | Chat completion model |
-| `EMBEDDING_MODEL` | `snowflake-arctic-embed-l-v2.0` | Embedding model |
+| `EMBEDDING_MODEL` | `snowflake-arctic` | Embedding model |
 | `CHROMA_HOST` / `CHROMA_PORT` | `localhost` / `8000` | ChromaDB server address |
 | `CHROMA_COLLECTION` | `enterprise_docs` | Collection name in ChromaDB |
 | `TAVILY_API_KEY` | *(optional)* | Enables web search fallback |
 | `DOCS_DIR` | `docs` | Directory scanned for PDFs |
-| `CHUNK_SIZE` / `CHUNK_OVERLAP` | `800` / `200` | Text splitting parameters |
-| `RETRIEVER_K` | `5` | Number of chunks retrieved per query |
+| `PARENT_CHUNK_SIZE` / `PARENT_CHUNK_OVERLAP` | `1500` / `200` | Parent chunk splitting |
+| `CHILD_CHUNK_SIZE` / `CHILD_CHUNK_OVERLAP` | `400` / `100` | Child chunk splitting |
+| `CHUNK_MIN_SIZE` | `50` | Minimum chunk size (filters noise) |
+| `USE_SEMANTIC_CHUNKING` | `false` | Use embedding-based split points for children |
+| `DOCSTORE_DIR` | `docstore` | Directory for parent document JSON files |
+| `RETRIEVER_K` | `5` | Number of child chunks searched per query |
 
 When changing models or parameters, update `.env` — `config.py` will pick them up. No code changes needed.
 
@@ -67,7 +76,8 @@ When changing models or parameters, update `.env` — `config.py` will pick them
 ## Pitfalls
 
 - ChromaDB must be running before `query.py` or `app.py` (container or standalone)
-- `ingest.py` must run before querying (populates the ChromaDB collection)
-- `ingest.py` **deletes and recreates** the collection on each run — not incremental
+- `ingest.py` must run before querying (populates ChromaDB collection + `docstore/`)
+- `ingest.py` **deletes and recreates** the collection and docstore on each run — not incremental
 - Tavily fallback only triggers when the vectorstore returns **zero** documents
 - Docker Compose overrides `CHROMA_HOST=chromadb` — don't hardcode `localhost` in `.env` if deploying via containers
+- Rebuild Docker image (`docker compose up -d --build`) after any code changes — otherwise containers use cached image

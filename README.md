@@ -119,14 +119,17 @@ All configuration is centralized in `config.py` and read from environment variab
 | `LLM_API_KEY` | *(required)* | Virtual key for Model Broker |
 | `LLM_MODEL` | `llama-3.3-70b` | Chat completion model |
 | `LLM_TEMPERATURE` | `0.3` | LLM temperature |
-| `EMBEDDING_MODEL` | `snowflake-arctic-embed-l-v2.0` | Embedding model |
+| `EMBEDDING_MODEL` | `snowflake-arctic` | Embedding model |
 | `CHROMA_HOST` | `localhost` | ChromaDB server host |
 | `CHROMA_PORT` | `8000` | ChromaDB server port |
 | `CHROMA_COLLECTION` | `enterprise_docs` | ChromaDB collection name |
 | `DOCS_DIR` | `docs` | Directory scanned for PDFs |
-| `CHUNK_SIZE` | `800` | Text chunk size (characters) |
-| `CHUNK_OVERLAP` | `200` | Overlap between chunks |
-| `RETRIEVER_K` | `5` | Number of chunks retrieved per query |
+| `PARENT_CHUNK_SIZE` / `PARENT_CHUNK_OVERLAP` | `1500` / `200` | Parent chunk splitting |
+| `CHILD_CHUNK_SIZE` / `CHILD_CHUNK_OVERLAP` | `400` / `100` | Child chunk splitting |
+| `CHUNK_MIN_SIZE` | `50` | Minimum chunk size (filters noise) |
+| `USE_SEMANTIC_CHUNKING` | `false` | Use embedding-based split points for children |
+| `DOCSTORE_DIR` | `docstore` | Directory for parent document JSON files |
+| `RETRIEVER_K` | `5` | Number of child chunks searched per query |
 | `TAVILY_API_KEY` | *(optional)* | Enables web search fallback |
 
 ## Project Structure
@@ -134,22 +137,24 @@ All configuration is centralized in `config.py` and read from environment variab
 ```
 enterprise-doc-ai/
 ├── config.py          # Centralized configuration (env vars with defaults)
-├── ingest.py          # Document ingestion — all PDFs → ChromaDB server
+├── ingest.py          # Document ingestion — PDFs → parent/child chunks → ChromaDB + docstore
+├── retriever.py       # Parent-child retriever (shared by query.py and app.py)
 ├── query.py           # Interactive CLI query interface
 ├── app.py             # Streamlit web UI for querying documentation
 ├── web_search.py      # Tavily web search fallback (docs.microfocus.com only)
 ├── requirements.txt   # Python dependencies
 ├── Dockerfile         # Container image for the Streamlit app
-├── docker-compose.yml # ChromaDB + app orchestration
+├── docker-compose.yml # ChromaDB + chromadb-admin + app orchestration
 ├── .env               # API key configuration (not tracked in git)
-└── docs/              # PDF documentation (not tracked in git)
+├── docs/              # PDF documentation (not tracked in git)
+└── docstore/          # Parent document JSON files (not tracked in git)
 ```
 
 ## Key Technologies
 
 - **LangChain (LCEL)** — LangChain Expression Language for composable LLM pipelines
-- **Model Broker** — Internal OpenAI-compatible API for LLM (`llama-3.3-70b`) and embeddings (`snowflake-arctic-embed-l-v2.0`)
-- **ChromaDB** — Vector database for similarity search (runs as standalone server)
+- **Model Broker** — Internal OpenAI-compatible API for LLM (`llama-3.3-70b`) and embeddings (`snowflake-arctic`)
+- **ChromaDB** — Vector database for similarity search (runs as standalone server, admin UI at `localhost:3000`)
 - **Tavily** — Web search fallback, restricted to official documentation at `docs.microfocus.com`
 - **Streamlit** — Web UI framework for the interactive assistant
 - **Docker Compose** — Container orchestration for ChromaDB and the app
